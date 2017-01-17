@@ -33,11 +33,11 @@ class Network(object):
         self.sizes = sizes
         self.biases = [np.random.randn(y, 1) for y in sizes[1:]]
         self.weights = [np.random.randn(y, x)
-                        for x, y in zip(sizes[:-1], sizes[1:])]
+                        for x, y in list(zip(sizes[:-1], sizes[1:]))]
 
     def feedforward(self, a):
         """Return the output of the network if ``a`` is input."""
-        for b, w in zip(self.biases, self.weights):
+        for b, w in list(zip(self.biases, self.weights)):
             a = sigmoid(np.dot(w, a) + b)
 
         return a
@@ -52,27 +52,30 @@ class Network(object):
         network will be evaluated against the test data after each
         epoch, and partial progress printed out.  This is useful for
         tracking progress, but slows things down substantially."""
-        if test_data:
-            n_test = len(test_data)
-        
-        n = len(training_data)
+        list_training_data = list(training_data)
+        list_test_data = list(test_data)
 
-        for j in xrange(epochs):
-            random.shuffle(training_data)
+        if test_data:
+            n_test = len(list_test_data)
+        
+        n = len(list_training_data)
+
+        for j in range(epochs):
+            random.shuffle(list_training_data)
             mini_batches = [
-                training_data[k:k + mini_batch_size]
-                for k in xrange(0, n, mini_batch_size)]
+                list_training_data[k:k + mini_batch_size]
+                for k in range(0, n, mini_batch_size)]
 
             for mini_batch in mini_batches:
-                self.update_mini_batch(mini_batch, eta)
+                self.update_mini_batch(mini_batch, mini_batch_size, eta)
 
             if test_data:
                 print ("Epoch {0}: {1} / {2}".format(
-                    j, self.evaluate(test_data), n_test))
+                    j, self.evaluate(list_test_data), n_test))
             else:
                 print ("Epoch {0} complete".format(j))
 
-    def update_mini_batch(self, mini_batch, eta):
+    def update_mini_batch(self, mini_batch, mini_batch_size, eta):
         """Update the network's weights and biases by applying
         gradient descent using backpropagation to a single mini batch.
         The ``mini_batch`` is a list of tuples ``(x, y)``, and ``eta``
@@ -83,13 +86,13 @@ class Network(object):
         for x, y in mini_batch:
             delta_nabla_b, delta_nabla_w = self.backprop(x, y)
 
-            nabla_b = [nb + dnb for nb, dnb in zip(nabla_b, delta_nabla_b)]
-            nabla_w = [nw + dnw for nw, dnw in zip(nabla_w, delta_nabla_w)]
+            nabla_b = [nb + dnb for nb, dnb in list(zip(nabla_b, delta_nabla_b))]
+            nabla_w = [nw + dnw for nw, dnw in list(zip(nabla_w, delta_nabla_w))]
 
-        self.weights = [w - (eta / len(mini_batch)) * nw
-                        for w, nw in zip(self.weights, nabla_w)]
-        self.biases = [b - (eta / len(mini_batch)) * nb
-                       for b, nb in zip(self.biases, nabla_b)]
+        self.weights = [w - (eta / mini_batch_size) * nw
+                        for w, nw in list(zip(self.weights, nabla_w))]
+        self.biases = [b - (eta / mini_batch_size) * nb
+                       for b, nb in list(zip(self.biases, nabla_b))]
 
     def backprop(self, x, y):
         """Return a tuple ``(nabla_b, nabla_w)`` representing the
@@ -104,7 +107,7 @@ class Network(object):
         activations = [x] # list to store all the activations, layer by layer
         zs = [] # list to store all the z vectors, layer by layer
 
-        for b, w in zip(self.biases, self.weights):
+        for b, w in list(zip(self.biases, self.weights)):
             z = np.dot(w, activation) + b
             zs.append(z)
             activation = sigmoid(z)
@@ -123,7 +126,7 @@ class Network(object):
         # second-last layer, and so on.  It's a renumbering of the
         # scheme in the book, used here to take advantage of the fact
         # that Python can use negative indices in lists.
-        for l in xrange(2, self.num_layers):
+        for l in range(2, self.num_layers):
             z = zs[-l]
             sp = sigmoid_prime(z)
 
