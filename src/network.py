@@ -16,31 +16,41 @@ import random
 # Third-party libraries
 import numpy as np
 
+#### Miscellaneous functions
+def sigmoid(z):
+    """The sigmoid function."""
+    return 1.0 / (1.0 + np.exp(-z))
+
+def sigmoid_prime(z):
+    """Derivative of the sigmoid function."""
+    return sigmoid(z) * (1 - sigmoid(z))
+
 class Network(object):
 
     def __init__(self, sizes):
         """The list ``sizes`` contains the number of neurons in the
-        respective layers of the network.  For example, if the list
-        was [2, 3, 1] then it would be a three-layer network, with the
-        first layer containing 2 neurons, the second layer 3 neurons,
-        and the third layer 1 neuron.  The biases and weights for the
-        network are initialized randomly, using a Gaussian
-        distribution with mean 0, and variance 1.  Note that the first
-        layer is assumed to be an input layer, and by convention we
-        won't set any biases for those neurons, since biases are only
-        ever used in computing the outputs from later layers."""
+        respective layers of the network.
+        For example, if the list was [2, 3, 1] then it would be a three-layer network,
+        with the first layer containing 2 neurons, the second layer 3 neurons, and the third layer 1 neuron.
+        The biases and weights for the network are initialized randomly,
+        using a Gaussian distribution with mean 0, and variance 1.
+        Note that the first layer is assumed to be an input layer,
+        and by convention we won't set any biases for those neurons,
+        since biases are only ever used in computing the outputs from later layers."""
+
         self.num_layers = len(sizes)
         self.sizes = sizes
-        self.biases = [np.random.randn(y, 1) for y in sizes[1:]]
-        self.weights = [np.random.randn(y, x)
-                        for x, y in list(zip(sizes[:-1], sizes[1:]))]
+        self.biases = [np.random.randn(num_neurons, 1) for num_neurons in sizes[1:]]
+        self.weights = [np.random.randn(num_neurons_current_layer, num_neurons_previous_layer)
+                        for num_neurons_previous_layer, num_neurons_current_layer
+                        in list(zip(sizes[:-1], sizes[1:]))]
 
-    def feedforward(self, a):
-        """Return the output of the network if ``a`` is input."""
-        for b, w in list(zip(self.biases, self.weights)):
-            a = sigmoid(np.dot(w, a) + b)
+    def feedforward(self, activation):
+        """Return the output of the network if ``activation`` is input."""
+        for w, b in list(zip(self.weights, self.biases)):
+            activation = sigmoid(np.dot(w, activation) + b)
 
-        return a
+        return activation
 
     def SGD(self, training_data, epochs, mini_batch_size, eta,
             test_data = None):
@@ -60,104 +70,100 @@ class Network(object):
         
         n = len(list_training_data)
 
-        for j in range(epochs):
+        for epoch in range(epochs):
             random.shuffle(list_training_data)
             mini_batches = [
-                list_training_data[k:k + mini_batch_size]
-                for k in range(0, n, mini_batch_size)]
+                               list_training_data[k : min(k + mini_batch_size, n - 1)]
+                               for k in range(0, n, mini_batch_size)
+                           ]
 
             for mini_batch in mini_batches:
                 self.update_mini_batch(mini_batch, mini_batch_size, eta)
 
             if test_data:
-                print ("Epoch {0}: {1} / {2}".format(
-                    j, self.evaluate(list_test_data), n_test))
+                print ('Epoch {0}: {1} / {2}'.format(epoch, self.evaluate(list_test_data), n_test))
             else:
-                print ("Epoch {0} complete".format(j))
+                print ('Epoch {0} completed.'.format(epoch))
 
     def update_mini_batch(self, mini_batch, mini_batch_size, eta):
         """Update the network's weights and biases by applying
         gradient descent using backpropagation to a single mini batch.
+        ``nabla_b`` and ``nabla_w`` are layer-by-layer lists of numpy arrays,
+        similar to ``self.biases`` and ``self.weights``.
         The ``mini_batch`` is a list of tuples ``(x, y)``, and ``eta``
         is the learning rate."""
-        nabla_b = [np.zeros(b.shape) for b in self.biases]
+
         nabla_w = [np.zeros(w.shape) for w in self.weights]
+        nabla_b = [np.zeros(b.shape) for b in self.biases]
 
-        for x, y in mini_batch:
-            delta_nabla_b, delta_nabla_w = self.backprop(x, y)
+        # Backprop for each training data point (x, y) in the mini_batch
+        for x, t in mini_batch:
+            delta_nabla_w, delta_nabla_b = self.backprop(x, t)
 
-            nabla_b = [nb + dnb for nb, dnb in list(zip(nabla_b, delta_nabla_b))]
             nabla_w = [nw + dnw for nw, dnw in list(zip(nabla_w, delta_nabla_w))]
+            nabla_b = [nb + dnb for nb, dnb in list(zip(nabla_b, delta_nabla_b))]
 
+        # Update weights and biases after the mini_batch is done
         self.weights = [w - (eta / mini_batch_size) * nw
                         for w, nw in list(zip(self.weights, nabla_w))]
         self.biases = [b - (eta / mini_batch_size) * nb
-                       for b, nb in list(zip(self.biases, nabla_b))]
+                        for b, nb in list(zip(self.biases, nabla_b))]
 
-    def backprop(self, x, y):
-        """Return a tuple ``(nabla_b, nabla_w)`` representing the
-        gradient for the cost function C_x.  ``nabla_b`` and
-        ``nabla_w`` are layer-by-layer lists of numpy arrays, similar
-        to ``self.biases`` and ``self.weights``."""
-        nabla_b = [np.zeros(b.shape) for b in self.biases]
+    def backprop(self, x, t):
+        """Return a tuple ``(nabla_b, nabla_w)`` representing the gradient for the cost function.
+        ``nabla_b`` and ``nabla_w`` are layer-by-layer lists of numpy arrays,
+        similar to ``self.biases`` and ``self.weights``."""
+
         nabla_w = [np.zeros(w.shape) for w in self.weights]
+        nabla_b = [np.zeros(b.shape) for b in self.biases]
 
-        # feedforward
+        # Feedforward
         activation = x
-        activations = [x] # list to store all the activations, layer by layer
-        zs = [] # list to store all the z vectors, layer by layer
+        activations = [ x ] # List to store all the activations, layer by layer
+        zs = [] # List to store all the z vectors, layer by layer
 
-        for b, w in list(zip(self.biases, self.weights)):
+        for w, b in list(zip(self.weights, self.biases)):
             z = np.dot(w, activation) + b
             zs.append(z)
             activation = sigmoid(z)
             activations.append(activation)
 
-        # backward pass
-        delta = self.cost_derivative(activations[-1], y) * \
-            sigmoid_prime(zs[-1]) #zs[-1] is the output of the last hidden layer, which is the activation of the output layer
+        # Backward pass
+        delta = self.cost_derivative(activations[-1], t)
 
-        nabla_b[-1] = delta
         nabla_w[-1] = np.dot(delta, activations[-2].transpose())
+        nabla_b[-1] = delta
 
         # Note that the variable l in the loop below is used a little
-        # differently to the notation in Chapter 2 of the book.  Here,
-        # l = 1 means the last layer of neurons, l = 2 is the
-        # second-last layer, and so on.  It's a renumbering of the
-        # scheme in the book, used here to take advantage of the fact
-        # that Python can use negative indices in lists.
+        # differently to the notation in Chapter 2 of the book.
+        # Here, l = 1 means the last layer of neurons, l = 2 is the
+        # second-last layer, and so on.
+        # It's a renumbering of the scheme in the book,
+        # used here to take advantage of the fact that Python can use negative indices in lists.
         for l in range(2, self.num_layers):
             z = zs[-l]
             sp = sigmoid_prime(z)
 
-            delta = np.dot(self.weights[-l+1].transpose(), delta) * sp
+            delta = np.dot(self.weights[-l + 1].transpose(), delta) * sp
 
+            nabla_w[-l] = np.dot(delta, activations[-l - 1].transpose())
             nabla_b[-l] = delta
-            nabla_w[-l] = np.dot(delta, activations[-l-1].transpose())
 
-        return (nabla_b, nabla_w)
+        return (nabla_w, nabla_b)
 
     def evaluate(self, test_data):
         """Return the number of test inputs for which the neural
         network outputs the correct result. Note that the neural
         network's output is assumed to be the index of whichever
         neuron in the final layer has the highest activation."""
-        test_results = [(np.argmax(self.feedforward(x)), y)
-                        for (x, y) in test_data]
 
-        return sum(int(x == y) for (x, y) in test_results)
+        test_results = [(np.argmax(self.feedforward(x)), y) for (x, y) in test_data]
 
-    def cost_derivative(self, output_activations, y):
-        """Return the vector of partial derivatives \partial C_x /
-        \partial a for the output activations."""
+        return sum(int(predict == y) for (predict, y) in test_results)
 
-        return (output_activations - y)
+    def cost_derivative(self, y, t):
+        """Return the vector of partial derivatives of the cost function
+        partial: {1/2 * (y - t)^2} / partial {y}
+        for the output activations."""
 
-#### Miscellaneous functions
-def sigmoid(z):
-    """The sigmoid function."""
-    return 1.0/(1.0+np.exp(-z))
-
-def sigmoid_prime(z):
-    """Derivative of the sigmoid function."""
-    return sigmoid(z)*(1-sigmoid(z))
+        return (y - t)
